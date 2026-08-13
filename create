@@ -206,11 +206,15 @@ ICON_ICNS=""  # final .icns path if conversion succeeded
 if [[ -n "$ICON_PATH" && "$ICON_PATH" == http* ]]; then
   ICON_WORK="$SRC_DIR/downloaded-icon.$(basename "$ICON_PATH" | sed 's/.*\.//')"
   echo "→ Icon:     downloading $ICON_PATH"
-  curl -sS -L -o "$ICON_WORK" "$ICON_PATH" 2>/dev/null || true
-  if [[ -f "$ICON_WORK" && -s "$ICON_WORK" ]]; then
-    ICON_PATH="$ICON_WORK"
+  if curl -sS -L --connect-timeout 10 --max-time 30 -o "$ICON_WORK" "$ICON_PATH" 2>/dev/null; then
+    if [[ -f "$ICON_WORK" && -s "$ICON_WORK" ]]; then
+      ICON_PATH="$ICON_WORK"
+    else
+      echo "  ⚠ Downloaded file is empty, skipping icon"
+      ICON_PATH=""
+    fi
   else
-    echo "  ⚠ Download failed, skipping icon"
+    echo "  ⚠ Download timed out or failed, skipping icon"
     ICON_PATH=""
   fi
 fi
@@ -398,7 +402,7 @@ SWIFT
 
 # ── Compile ───────────────────────────────────────────────────
 
-echo "→ Compiling…"
+echo "→ Compiling… (this may take 30-60s on first run)"
 if ! swiftc -parse-as-library -o "$SRC_DIR/$BIN_NAME" "$SWIFT_FILE" \
     -framework SwiftUI -framework WebKit -framework Foundation 2>&1; then
   echo "✗ Compilation failed" >&2

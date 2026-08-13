@@ -40,7 +40,9 @@ local-web-app 把这类服务**包成双击即开的 macOS App**：
 bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
 ```
 
-> 💡 远程执行时预设图标会自动从 GitHub 下载。你也可以加上 `--icon <url>` 指定自定义图标。
+> ⚠️ 首次编译 SwiftUI 需 30-60 秒，请耐心等待。如果 GitHub 下载慢，可在 curl 前加 `--connect-timeout 10`。
+>
+> 💡 远程执行时预设图标会自动从 GitHub 下载（10 秒连接超时 + 30 秒下载超时，失败自动跳过）。你也可以加上 `--icon <url>` 指定自定义图标。
 
 ### 本地安装
 
