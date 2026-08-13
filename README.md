@@ -188,17 +188,35 @@ npm install -g @deepseek-ai/dsh    # 更新 dsh
 ./create --preset dsh    # 重建 DeepSeek Harness App
 ```
 
-## 为什么不是 Pake / Electron / Tauri
+## 竞品对比
 
-| | **local-web-app** | Pake | Electron | Tauri |
-|---|---|---|---|---|
-| 包体大小 | **~150KB** | ~3MB | ~150MB | ~5MB |
-| 依赖 | **无**（系统自带） | Rust 工具链 | Node + Electron | Rust + Cargo |
-| 进程生命周期 | **✅ 自动管理** | ❌ 不管理 | 需自己写 | 需自己写 |
-| 系统资源 | 系统 WebView | 系统 WebView | 自带 Chromium | 系统 WebView |
-| 安装步骤 | 一条命令 | 安装 Rust + 编译 | 安装 Node + 脚手架 | 安装 Rust + 编译 |
+### 功能对比
 
-核心差异：**零依赖 + 进程生命周期管理**。不需要装 Rust/Node，不需要编译原生模块，系统自带的 `swiftc` 就够了。
+| | **local-web-app** | [app-it](https://github.com/Christian-Katzmann/app-it) | [Pake](https://github.com/tw93/Pake) | [Nativefier](https://github.com/nativefier/nativefier) | Electron |
+|---|---|---|---|---|---|
+| 包体大小 | **~150KB** | ~150KB | ~3MB | ~150MB | ~150MB |
+| 运行时 | 系统 WebView | 系统 WebView / Chrome | 系统 WebView | 自带 Chromium | 自带 Chromium |
+| 依赖 | **无**（系统自带） | Claude Code / Codex | Rust 工具链 | Node + Electron | Node + Electron |
+| 安装方式 | 一行 shell 命令 | 需安装 AI 技能 | 安装 Rust + npm | npm install | npm + 脚手架 |
+| 进程生命周期 | **✅ 自动启停** | ✅ 自动启停 | ❌ 不管理 | ❌ 不管理 | 需自己写 |
+| 预设快捷方式 | **✅ 内置** | ❌ | ❌ | ❌ | — |
+| 远程一键执行 | **✅ curl + bash** | ❌ | ❌ | ❌ | — |
+| 本地服务包装 | **✅ 核心场景** | ✅ | ❌ (远程网站) | ❌ (远程网站) | 需自己写 |
+| 远程网站包装 | ❌ | ✅ | ✅ | ✅ | ✅ |
+| macOS | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Windows | ❌ | 🧪 Beta | ✅ | ✅ | ✅ |
+| Linux | ❌ | ❌ | ✅ | ✅ | ✅ |
+| 状态 | 活跃 | 活跃 | 活跃 | **已停止维护** | 活跃 |
+
+### 差异解读
+
+**vs app-it** — 最相似的竞品，同样使用 Swift + WKWebView + 进程管理。核心区别：app-it 是 Claude Code/Codex 的 AI 技能，需要先安装 AI 编程助手才能使用；local-web-app 是独立的 shell 脚本，一行命令直接运行，也支持远程一键执行。app-it 更智能（自动探测项目类型、端口、选择启动策略），local-web-app 更直接（你告诉它 URL 和启动命令，它直接做）。
+
+**vs Pake** — Pake 用 Tauri（Rust）包装远程网站为桌面 App，需要 Rust 编译环境，生成的 App ~3MB。Pake 不管理进程生命周期，也不适合包装需要先启动本地服务器的场景。local-web-app 专注本地服务，自动管理启停，零依赖。
+
+**vs Nativefier** — 已停止维护的 Electron 包装工具。包体 ~150MB（自带 Chromium），不支持进程管理，不适合本地服务场景。legacy 项目，不推荐新项目使用。
+
+**核心定位**：local-web-app 专为**本地 Web 服务**设计 — 你的场景是「先启动一个本地进程，再用 WebView 打开它」。这是 Pake/Nativefier 不覆盖的盲区，也是 app-it 覆盖但需要 AI 助手前置的场景。
 
 ## 文件结构
 
