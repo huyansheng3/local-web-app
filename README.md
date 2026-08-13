@@ -5,7 +5,10 @@
 零依赖 — 只用系统自带的 `swiftc` + `WKWebView`，生成的 .app 约 **150KB**。
 
 ```bash
-# 一键包装 DeepSeek Harness
+# 远程一键执行（无需 clone）
+bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
+
+# 或本地执行
 ./create --preset dsh
 
 # 自定义任意本地服务
@@ -30,10 +33,19 @@ local-web-app 把这类服务**包成双击即开的 macOS App**：
 - macOS 14+ (Sonoma)
 - Xcode Command Line Tools: `xcode-select --install`
 
-### 使用
+### 远程一键执行（无需 clone）
 
 ```bash
-git clone https://github.com/huyansheng/local-web-app.git
+# 直接从 GitHub 运行，无需下载仓库
+bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
+```
+
+> 💡 远程执行时预设图标会自动从 GitHub 下载。你也可以加上 `--icon <url>` 指定自定义图标。
+
+### 本地安装
+
+```bash
+git clone https://github.com/huyansheng3/local-web-app.git
 cd local-web-app
 chmod +x create
 ```
@@ -221,13 +233,14 @@ local-web-app/
 
 **Q: 如何添加新预设？**
 
-编辑 `create` 脚本顶部的 `PRESET_*` 关联数组：
+编辑 `create` 脚本顶部的 `preset_*` 函数，在 case 语句中添加新条目：
 
 ```bash
-PRESET_NAME[yourapp]="Your App Name"
-PRESET_URL[yourapp]="http://127.0.0.1:8080"
-PRESET_START[yourapp]="yourapp serve"
-PRESET_ICON[yourapp]="$SCRIPT_DIR/icons/yourapp.png"
+preset_name()  { case "$1" in ... ; yourapp) echo "Your App Name" ;; esac; }
+preset_url()   { case "$1" in ... ; yourapp) echo "http://127.0.0.1:8080" ;; esac; }
+preset_start() { case "$1" in ... ; yourapp) echo "yourapp serve" ;; esac; }
+preset_icon()  { case "$1" in ... ; yourapp) echo "$SCRIPT_DIR/icons/yourapp.png" ;; esac; }
+preset_keys()  { echo "... yourapp"; }
 ```
 
 欢迎提 PR 添加更多预设！

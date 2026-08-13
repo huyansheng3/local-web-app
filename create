@@ -5,13 +5,24 @@ set -euo pipefail
 
 VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GITHUB_RAW="https://raw.githubusercontent.com/huyansheng3/local-web-app/main"
 
 # ── Preset lookup (compatible with bash 3 on macOS) ──────────
 
 preset_name()   { case "$1" in dsh) echo "DeepSeek Harness" ;; reasonix) echo "Reasonix" ;; *) echo "" ;; esac; }
 preset_url()    { case "$1" in dsh) echo "http://127.0.0.1:3080" ;; reasonix) echo "http://127.0.0.1:8787" ;; *) echo "" ;; esac; }
 preset_start()  { case "$1" in dsh) echo "dsh --profile web" ;; reasonix) echo "reasonix web" ;; *) echo "" ;; esac; }
-preset_icon()   { case "$1" in dsh) echo "$SCRIPT_DIR/icons/dsh.png" ;; reasonix) echo "$SCRIPT_DIR/icons/reasonix.png" ;; *) echo "" ;; esac; }
+preset_icon()   {
+  local key="$1"
+  local local_icon=""
+  case "$key" in dsh) local_icon="$SCRIPT_DIR/icons/dsh.png" ;; reasonix) local_icon="$SCRIPT_DIR/icons/reasonix.png" ;; esac
+  if [[ -f "$local_icon" ]]; then
+    echo "$local_icon"
+  else
+    # Remote execution: icon file not found locally, use GitHub raw URL
+    case "$key" in dsh) echo "$GITHUB_RAW/icons/dsh.png" ;; reasonix) echo "$GITHUB_RAW/icons/reasonix.png" ;; *) echo "" ;; esac
+  fi
+}
 preset_keys()   { echo "dsh reasonix"; }
 
 # ── Arg parsing ───────────────────────────────────────────────
@@ -41,6 +52,8 @@ while [[ $# -gt 0 ]]; do
         ICON="$(preset_icon "$key")"
         if [[ -f "$ICON" ]]; then
           printf "  %-12s  Icon: ✅ built-in\n" ""
+        elif [[ "$ICON" == http* ]]; then
+          printf "  %-12s  Icon: 🌐 remote\n" ""
         else
           printf "  %-12s  Icon: (none)\n" ""
         fi
