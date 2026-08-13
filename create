@@ -1,0 +1,461 @@
+#!/usr/bin/env bash
+# local-web-app: Wrap any local web server into a macOS .app
+# https://github.com/huyansheng/local-web-app
+set -euo pipefail
+
+VERSION="1.0.0"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ── Preset lookup (compatible with bash 3 on macOS) ──────────
+
+preset_name()   { case "$1" in dsh) echo "DeepSeek Harness" ;; reasonix) echo "Reasonix" ;; *) echo "" ;; esac; }
+preset_url()    { case "$1" in dsh) echo "http://127.0.0.1:3080" ;; reasonix) echo "http://127.0.0.1:8787" ;; *) echo "" ;; esac; }
+preset_start()  { case "$1" in dsh) echo "dsh --profile web" ;; reasonix) echo "reasonix web" ;; *) echo "" ;; esac; }
+preset_icon()   { case "$1" in dsh) echo "$SCRIPT_DIR/icons/dsh.png" ;; reasonix) echo "$SCRIPT_DIR/icons/reasonix.png" ;; *) echo "" ;; esac; }
+preset_keys()   { echo "dsh reasonix"; }
+
+# ── Arg parsing ───────────────────────────────────────────────
+
+ACTION="create"
+APP_NAME=""
+APP_URL=""
+START_CMD=""
+ICON_PATH=""
+PRESET=""
+TIMEOUT=30
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --url)       APP_URL="$2"; shift 2 ;;
+    --start)     START_CMD="$2"; shift 2 ;;
+    --icon)      ICON_PATH="$2"; shift 2 ;;
+    --preset)    PRESET="$2"; shift 2 ;;
+    --timeout)   TIMEOUT="$2"; shift 2 ;;
+    --list-presets|--presets)
+      echo "Available presets:"
+      echo ""
+      for key in $(preset_keys); do
+        printf "  %-12s  %s\n" "$key" "$(preset_name "$key")"
+        printf "  %-12s  URL: %s\n" "" "$(preset_url "$key")"
+        printf "  %-12s  Start: %s\n" "" "$(preset_start "$key")"
+        ICON="$(preset_icon "$key")"
+        if [[ -f "$ICON" ]]; then
+          printf "  %-12s  Icon: ✅ built-in\n" ""
+        else
+          printf "  %-12s  Icon: (none)\n" ""
+        fi
+        echo ""
+      done
+      echo "Usage: $0 --preset <name>"
+      exit 0 ;;
+    --uninstall)
+      ACTION="uninstall"; shift ;;
+    --rebuild)
+      ACTION="rebuild"; shift ;;
+    -v|--version)
+      echo "local-web-app v$VERSION"; exit 0 ;;
+    -h|--help)
+      cat << 'HELP'
+local-web-app — Wrap any local web server into a macOS .app
+
+Usage:
+  ./create [app-name] --url <url> --start <command> [options]
+  ./create --preset <name> [options]
+  ./create --uninstall [app-name]
+  ./create --rebuild [app-name]
+
+Actions:
+  create              Create a new .app (default)
+  --uninstall         Remove a previously created .app and kill its server
+  --rebuild           Rebuild the .app (re-compile with same settings)
+
+Create options:
+  app-name            Display name (also used as .app bundle name)
+  --url               Local URL the app opens (e.g. http://127.0.0.1:3080)
+  --start             Shell command to start the server
+  --preset            Use a built-in preset (dsh, reasonix, ...)
+  --icon              Path or URL to .icns/.png icon
+  --timeout           Server startup timeout in seconds (default: 30)
+
+Preset examples:
+  ./create --preset dsh
+  ./create --preset reasonix
+
+Custom examples:
+  ./create 'DeepSeek Harness' --url http://127.0.0.1:3080 --start 'dsh --profile web'
+  ./create 'Ollama Web' --url http://127.0.0.1:11434 --start 'ollama serve'
+  ./create 'Local Dev' --url http://localhost:3000 --start 'cd ~/project && npm run dev'
+  ./create 'My App' --url http://localhost:8080 --start './start.sh' --icon ./icon.png
+  ./create 'Remote App' --url http://localhost:8080 --start './start.sh' --icon https://example.com/icon.png
+
+Other:
+  --list-presets      Show all available presets
+  --uninstall "Name"  Remove the .app from ~/Applications
+  --rebuild "Name"    Re-create the .app with same settings
+  -v, --version       Show version
+  -h, --help          Show this help
+HELP
+      exit 0 ;;
+    *) APP_NAME="$1"; shift ;;
+  esac
+done
+
+# ── Preset expansion ──────────────────────────────────────────
+
+if [[ -n "$PRESET" ]]; then
+  PNAME="$(preset_name "$PRESET")"
+  if [[ -z "$PNAME" ]]; then
+    echo "Error: unknown preset '$PRESET'" >&2
+    echo "Available: $(preset_keys)" >&2
+    exit 1
+  fi
+  APP_NAME="$PNAME"
+  APP_URL="$(preset_url "$PRESET")"
+  START_CMD="$(preset_start "$PRESET")"
+  # Use built-in icon if available and no explicit --icon given
+  PICON="$(preset_icon "$PRESET")"
+  if [[ -z "$ICON_PATH" && -f "$PICON" ]]; then
+    ICON_PATH="$PICON"
+  fi
+fi
+
+# ── Uninstall action ─────────────────────────────────────────
+
+if [[ "$ACTION" == "uninstall" ]]; then
+  if [[ -z "$APP_NAME" ]]; then
+    echo "Error: specify app name to uninstall" >&2
+    echo "Usage: $0 --uninstall 'App Name'" >&2
+    exit 1
+  fi
+  TARGET="$HOME/Applications/${APP_NAME}.app"
+  if [[ ! -d "$TARGET" ]]; then
+    echo "App not found: $TARGET" >&2
+    exit 1
+  fi
+  # Try to kill any running instance
+  BIN_NAME="app-$(echo -n "$APP_NAME" | md5 | head -c8)"
+  pkill -f "$TARGET/Contents/MacOS/$BIN_NAME" 2>/dev/null || true
+  sleep 1
+  rm -rf "$TARGET"
+  echo "✅ Uninstalled: $TARGET"
+  exit 0
+fi
+
+# ── Rebuild action ────────────────────────────────────────────
+
+if [[ "$ACTION" == "rebuild" ]]; then
+  if [[ -z "$APP_NAME" ]]; then
+    echo "Error: specify app name to rebuild" >&2
+    echo "Usage: $0 --rebuild 'App Name'" >&2
+    exit 1
+  fi
+  TARGET="$HOME/Applications/${APP_NAME}.app"
+  if [[ ! -d "$TARGET" ]]; then
+    echo "App not found: $TARGET" >&2
+    exit 1
+  fi
+  echo "Rebuild reads config from the existing .app metadata."
+  echo "For preset apps, just re-run: $0 --preset <name>"
+  exit 0
+fi
+
+# ── Validate create args ─────────────────────────────────────
+
+if [[ -z "$APP_NAME" || -z "$APP_URL" || -z "$START_CMD" ]]; then
+  echo "Error: app name, --url, and --start are required (or use --preset)." >&2
+  echo "Run with --help for usage." >&2
+  exit 1
+fi
+
+# ── Paths ─────────────────────────────────────────────────────
+
+BUNDLE_ID="app.local-web.$(echo -n "$APP_NAME" | md5 | head -c8)"
+APP_DIR="$HOME/Applications/${APP_NAME}.app"
+MACOS_DIR="$APP_DIR/Contents/MacOS"
+RES_DIR="$APP_DIR/Contents/Resources"
+SRC_DIR="$(mktemp -d)"
+SWIFT_FILE="$SRC_DIR/App.swift"
+BIN_NAME="app-$(echo -n "$APP_NAME" | md5 | head -c8)"
+LOG_NAME="local-web-app-${BIN_NAME}.log"
+
+echo "→ App:      $APP_DIR"
+echo "→ Bundle:   $BUNDLE_ID"
+echo "→ URL:      $APP_URL"
+echo "→ Start:    $START_CMD"
+echo "→ Timeout:  ${TIMEOUT}s"
+
+# ── Icon handling (to temp dir, copied to app in package step) ──
+
+ICON_NAME=""
+ICON_ICNS=""  # final .icns path if conversion succeeded
+
+# Download icon if URL
+if [[ -n "$ICON_PATH" && "$ICON_PATH" == http* ]]; then
+  ICON_WORK="$SRC_DIR/downloaded-icon.$(basename "$ICON_PATH" | sed 's/.*\.//')"
+  echo "→ Icon:     downloading $ICON_PATH"
+  curl -sS -L -o "$ICON_WORK" "$ICON_PATH" 2>/dev/null || true
+  if [[ -f "$ICON_WORK" && -s "$ICON_WORK" ]]; then
+    ICON_PATH="$ICON_WORK"
+  else
+    echo "  ⚠ Download failed, skipping icon"
+    ICON_PATH=""
+  fi
+fi
+
+if [[ -n "$ICON_PATH" && -f "$ICON_PATH" ]]; then
+  if [[ "$ICON_PATH" == *.icns ]]; then
+    ICON_ICNS="$ICON_PATH"
+    ICON_NAME="AppIcon"
+    echo "→ Icon:     ✅ icns ready"
+  elif [[ "$ICON_PATH" == *.png ]]; then
+    SIPS_ICONSET="$SRC_DIR/AppIcon.iconset"
+    mkdir -p "$SIPS_ICONSET"
+    sips -z 16 16     "$ICON_PATH" --out "$SIPS_ICONSET/icon_16x16.png"     >/dev/null 2>&1 || true
+    sips -z 32 32     "$ICON_PATH" --out "$SIPS_ICONSET/icon_16x16@2x.png"  >/dev/null 2>&1 || true
+    sips -z 32 32     "$ICON_PATH" --out "$SIPS_ICONSET/icon_32x32.png"     >/dev/null 2>&1 || true
+    sips -z 64 64     "$ICON_PATH" --out "$SIPS_ICONSET/icon_32x32@2x.png"  >/dev/null 2>&1 || true
+    sips -z 128 128   "$ICON_PATH" --out "$SIPS_ICONSET/icon_128x128.png"   >/dev/null 2>&1 || true
+    sips -z 256 256   "$ICON_PATH" --out "$SIPS_ICONSET/icon_128x128@2x.png" >/dev/null 2>&1 || true
+    sips -z 256 256   "$ICON_PATH" --out "$SIPS_ICONSET/icon_256x256.png"   >/dev/null 2>&1 || true
+    sips -z 512 512   "$ICON_PATH" --out "$SIPS_ICONSET/icon_256x256@2x.png" >/dev/null 2>&1 || true
+    sips -z 512 512   "$ICON_PATH" --out "$SIPS_ICONSET/icon_512x512.png"   >/dev/null 2>&1 || true
+    sips -z 1024 1024 "$ICON_PATH" --out "$SIPS_ICONSET/icon_512x512@2x.png" >/dev/null 2>&1 || true
+    iconutil -c icns "$SIPS_ICONSET" -o "$SRC_DIR/AppIcon.icns" >/dev/null 2>&1 || true
+    rm -rf "$SIPS_ICONSET"
+    if [[ -f "$SRC_DIR/AppIcon.icns" ]]; then
+      ICON_ICNS="$SRC_DIR/AppIcon.icns"
+      ICON_NAME="AppIcon"
+      echo "→ Icon:     ✅ png → icns converted"
+    else
+      echo "  ⚠ Icon conversion failed"
+    fi
+  else
+    echo "  ⚠ Unsupported icon format (use .png or .icns)"
+  fi
+elif [[ -n "$ICON_PATH" ]]; then
+  echo "  ⚠ Icon file not found: $ICON_PATH"
+fi
+
+# ── Generate Swift source ─────────────────────────────────────
+
+esc() { echo "$1" | sed "s/'/'\\\\''/g"; }
+ESC_APP_NAME=$(esc "$APP_NAME")
+ESC_APP_URL=$(esc "$APP_URL")
+ESC_START_CMD=$(esc "$START_CMD")
+
+cat > "$SWIFT_FILE" << SWIFT
+import SwiftUI
+import WebKit
+
+// Auto-generated by local-web-app/create v${VERSION}
+// App: ${APP_NAME} | URL: ${APP_URL} | Start: ${START_CMD}
+
+final class ServerManager: ObservableObject {
+    @Published var isReady = false
+    @Published var errorMessage: String?
+    private var process: Process?
+    private var startedByUs = false
+    private var timeoutWork: DispatchWorkItem?
+
+    init() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.shutdown() }
+    }
+
+    func launch() {
+        probe { [weak self] up in
+            guard let self else { return }
+            if up { DispatchQueue.main.async { self.isReady = true } }
+            else  { self.startServer() }
+        }
+    }
+
+    func shutdown() {
+        timeoutWork?.cancel()
+        guard startedByUs, let process else { return }
+        process.terminate()
+        self.process = nil
+    }
+
+    private func startServer() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        p.arguments = ["-l", "-c", "exec ${ESC_START_CMD}"]
+        let logPath = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("${LOG_NAME}")
+        FileManager.default.createFile(atPath: logPath.path, contents: nil)
+        let logFH = try? FileHandle(forWritingTo: logPath)
+        p.standardOutput = logFH
+        p.standardError = logFH
+        p.terminationHandler = { [weak self] proc in
+            guard proc.terminationStatus != 0 else { return }
+            DispatchQueue.main.async {
+                self?.fail("Server exited (code \\(proc.terminationStatus)), log: \\(logPath.path)")
+            }
+        }
+        guard (try? p.run()) != nil else {
+            fail("Cannot start server process")
+            return
+        }
+        process = p
+        startedByUs = true
+        poll()
+        let timeout = ${TIMEOUT}
+        let t = DispatchWorkItem { [weak self] in
+            guard let self, !self.isReady else { return }
+            self.fail("Server startup timed out (\\(timeout)s), log: \\(logPath.path)")
+            self.shutdown()
+        }
+        timeoutWork = t
+        DispatchQueue.main.asyncAfter(deadline: .now() + .init(timeout), execute: t)
+    }
+
+    private func poll() {
+        guard !isReady else { return }
+        URLSession.shared.dataTask(with: URL(string: "${ESC_APP_URL}")!) { _, resp, _ in
+            DispatchQueue.main.async {
+                if resp != nil {
+                    self.timeoutWork?.cancel()
+                    self.isReady = true
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.poll() }
+                }
+            }
+        }.resume()
+    }
+
+    private func probe(done: @escaping (Bool) -> Void) {
+        URLSession.shared.dataTask(with: URL(string: "${ESC_APP_URL}")!) { _, resp, _ in
+            DispatchQueue.main.async { done(resp != nil) }
+        }.resume()
+    }
+
+    private func fail(_ msg: String) {
+        DispatchQueue.main.async { self.errorMessage = msg }
+    }
+}
+
+struct WebView: NSViewRepresentable {
+    let url: URL
+    func makeNSView(context: Context) -> WKWebView {
+        let wv = WKWebView()
+        wv.load(URLRequest(url: url))
+        return wv
+    }
+    func updateNSView(_ wv: WKWebView, context: Context) {}
+}
+
+@main
+struct LocalWebApp: App {
+    @StateObject var server = ServerManager()
+    var body: some Scene {
+        WindowGroup { ContentView(server: server) }
+            .defaultSize(width: 1280, height: 820)
+    }
+}
+
+struct ContentView: View {
+    @ObservedObject var server: ServerManager
+    var body: some View {
+        Group {
+            if server.isReady {
+                WebView(url: URL(string: "${ESC_APP_URL}")!)
+                    .frame(minWidth: 1024, minHeight: 680)
+            } else if let error = server.errorMessage {
+                VStack(spacing: 12) {
+                    Text("Startup Failed").font(.headline)
+                    Text(error).font(.caption).multilineTextAlignment(.center)
+                    Button("Retry") { server.errorMessage = nil; server.launch() }
+                }
+                .padding()
+                .frame(width: 520, height: 180)
+            } else {
+                VStack(spacing: 12) {
+                    ProgressView().controlSize(.large)
+                    Text("Starting ${ESC_APP_NAME}…").font(.headline)
+                }
+                .frame(width: 300, height: 120)
+            }
+        }
+        .onAppear { server.launch() }
+    }
+}
+SWIFT
+
+# ── Compile ───────────────────────────────────────────────────
+
+echo "→ Compiling…"
+if ! swiftc -parse-as-library -o "$SRC_DIR/$BIN_NAME" "$SWIFT_FILE" \
+    -framework SwiftUI -framework WebKit -framework Foundation 2>&1; then
+  echo "✗ Compilation failed" >&2
+  rm -rf "$SRC_DIR"
+  exit 1
+fi
+
+if [[ ! -f "$SRC_DIR/$BIN_NAME" ]]; then
+  echo "✗ Binary not found after compilation" >&2
+  rm -rf "$SRC_DIR"
+  exit 1
+fi
+
+# ── Package .app ─────────────────────────────────────────────
+
+# Kill existing instance if running
+pkill -f "$APP_DIR/Contents/MacOS/$BIN_NAME" 2>/dev/null || true
+sleep 1
+
+rm -rf "$APP_DIR"
+mkdir -p "$MACOS_DIR" "$RES_DIR"
+cp "$SRC_DIR/$BIN_NAME" "$MACOS_DIR/$BIN_NAME"
+
+# Copy icon if conversion succeeded
+if [[ -n "$ICON_ICNS" && -f "$ICON_ICNS" ]]; then
+  cp "$ICON_ICNS" "$RES_DIR/AppIcon.icns"
+fi
+
+ICON_PLIST_LINE=""
+if [[ -n "$ICON_NAME" ]]; then
+  ICON_PLIST_LINE="    <key>CFBundleIconFile</key>
+    <string>${ICON_NAME}</string>"
+fi
+
+cat > "$APP_DIR/Contents/Info.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>${APP_NAME}</string>
+    <key>CFBundleDisplayName</key>
+    <string>${APP_NAME}</string>
+    <key>CFBundleIdentifier</key>
+    <string>${BUNDLE_ID}</string>
+    <key>CFBundleVersion</key>
+    <string>1.0.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>${BIN_NAME}</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+${ICON_PLIST_LINE}
+</dict>
+</plist>
+PLIST
+
+# Ad-hoc sign
+codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || true
+
+# Cleanup temp
+rm -rf "$SRC_DIR"
+
+echo ""
+echo "✅ Done! App created at:"
+echo "   $APP_DIR"
+echo ""
+echo "   Double-click to open, or: open \"$APP_DIR\""

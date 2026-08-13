@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Build artifacts
+*.o
+*.build/
+
+# Generated apps (user-specific)
+*.app
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temp files
+/tmp/
+*.log
+
+# Node (if any scripts added later)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
