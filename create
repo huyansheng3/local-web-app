@@ -127,7 +127,7 @@ if [[ -n "$PRESET" ]]; then
   START_CMD="$(preset_start "$PRESET")"
   # Use built-in icon if available and no explicit --icon given
   PICON="$(preset_icon "$PRESET")"
-  if [[ -z "$ICON_PATH" && -f "$PICON" ]]; then
+  if [[ -z "$ICON_PATH" && -n "$PICON" ]]; then
     ICON_PATH="$PICON"
   fi
 fi
