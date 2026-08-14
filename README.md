@@ -48,7 +48,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/mai
 
 > ⚠️ 首次编译 SwiftUI 需 30-60 秒，请耐心等待。
 >
-> 💡 远程执行时预设图标会自动从 jsDelivr CDN 下载（10 秒连接超时 + 30 秒下载超时，失败自动跳过）。你也可以加上 `--icon <url>` 指定自定义图标。
+> 💡 预设图标已内嵌于脚本（base64），远程执行时无需额外下载。自定义图标仍支持 `--icon <url>` 从 URL 下载。
 
 ### 本地安装
 
