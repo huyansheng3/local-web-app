@@ -6,6 +6,7 @@ set -euo pipefail
 VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GITHUB_RAW="https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@main"
+GITHUB_RAW_ALT="https://raw.githubusercontent.com/huyansheng3/local-web-app/main"
 
 # ── Preset lookup (compatible with bash 3 on macOS) ──────────
 
@@ -202,20 +203,37 @@ echo "→ Timeout:  ${TIMEOUT}s"
 ICON_NAME=""
 ICON_ICNS=""  # final .icns path if conversion succeeded
 
-# Download icon if URL
+# Download icon if URL (with CDN fallback)
+_curl_download() {
+  local url="$1" out="$2"
+  curl -sS -L --connect-timeout 10 --max-time 30 -o "$out" "$url" 2>/dev/null
+}
+
 if [[ -n "$ICON_PATH" && "$ICON_PATH" == http* ]]; then
   ICON_WORK="$SRC_DIR/downloaded-icon.$(basename "$ICON_PATH" | sed 's/.*\.//')"
   echo "→ Icon:     downloading $ICON_PATH"
-  if curl -sS -L --connect-timeout 10 --max-time 30 -o "$ICON_WORK" "$ICON_PATH" 2>/dev/null; then
-    if [[ -f "$ICON_WORK" && -s "$ICON_WORK" ]]; then
-      ICON_PATH="$ICON_WORK"
+  if _curl_download "$ICON_PATH" "$ICON_WORK" && [[ -f "$ICON_WORK" && -s "$ICON_WORK" ]]; then
+    ICON_PATH="$ICON_WORK"
+  else
+    # Fallback: if the URL is on one CDN, try the other
+    ALT_URL=""
+    if [[ "$ICON_PATH" == *cdn.jsdelivr.net* ]]; then
+      ALT_URL="$(echo "$ICON_PATH" | sed 's|https://cdn.jsdelivr.net/gh/[^@]*@main|'"$GITHUB_RAW_ALT"'|')"
+    elif [[ "$ICON_PATH" == *raw.githubusercontent.com* ]]; then
+      ALT_URL="$(echo "$ICON_PATH" | sed 's|'"$GITHUB_RAW_ALT"'|'"$GITHUB_RAW"'|')"
+    fi
+    if [[ -n "$ALT_URL" && "$ALT_URL" != "$ICON_PATH" ]]; then
+      echo "  ⚠ Primary CDN failed, trying fallback: $ALT_URL"
+      if _curl_download "$ALT_URL" "$ICON_WORK" && [[ -f "$ICON_WORK" && -s "$ICON_WORK" ]]; then
+        ICON_PATH="$ICON_WORK"
+      else
+        echo "  ⚠ Fallback also failed, skipping icon"
+        ICON_PATH=""
+      fi
     else
-      echo "  ⚠ Downloaded file is empty, skipping icon"
+      echo "  ⚠ Download timed out or failed, skipping icon"
       ICON_PATH=""
     fi
-  else
-    echo "  ⚠ Download timed out or failed, skipping icon"
-    ICON_PATH=""
   fi
 fi
 
