@@ -5,7 +5,7 @@ set -euo pipefail
 
 VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GITHUB_RAW="https://raw.githubusercontent.com/huyansheng3/local-web-app/main"
+GITHUB_RAW="https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@main"
 
 # ── Preset lookup (compatible with bash 3 on macOS) ──────────
 
