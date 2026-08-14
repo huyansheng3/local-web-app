@@ -5,7 +5,10 @@
 零依赖 — 只用系统自带的 `swiftc` + `WKWebView`，生成的 .app 约 **150KB**。
 
 ```bash
-# 远程一键执行（无需 clone）
+# 远程一键执行（无需 clone）— 使用 jsDelivr CDN 镜像，国内直连
+bash <(curl -sSL https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@main/create) --preset dsh
+
+# 如果你能访问 GitHub，也可以用原始地址
 bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
 
 # 或本地执行
@@ -36,13 +39,16 @@ local-web-app 把这类服务**包成双击即开的 macOS App**：
 ### 远程一键执行（无需 clone）
 
 ```bash
-# 直接从 GitHub 运行，无需下载仓库
+# 推荐：通过 jsDelivr CDN 镜像执行（国内直连，不卡）
+bash <(curl -sSL https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@main/create) --preset dsh
+
+# 备选：通过 GitHub raw 执行（需要能访问 GitHub）
 bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
 ```
 
-> ⚠️ 首次编译 SwiftUI 需 30-60 秒，请耐心等待。如果 GitHub 下载慢，可在 curl 前加 `--connect-timeout 10`。
+> ⚠️ 首次编译 SwiftUI 需 30-60 秒，请耐心等待。
 >
-> 💡 远程执行时预设图标会自动从 GitHub 下载（10 秒连接超时 + 30 秒下载超时，失败自动跳过）。你也可以加上 `--icon <url>` 指定自定义图标。
+> 💡 远程执行时预设图标会自动从 jsDelivr CDN 下载（10 秒连接超时 + 30 秒下载超时，失败自动跳过）。你也可以加上 `--icon <url>` 指定自定义图标。
 
 ### 本地安装
 
