@@ -12,7 +12,18 @@ assert_contains() {
   fi
 }
 
+assert_equals() {
+  local expected="$1"
+  local actual="$2"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Expected: $expected" >&2
+    echo "Actual:   $actual" >&2
+    exit 1
+  fi
+}
+
 bash -n "$CREATE_SCRIPT"
+assert_equals 'local-web-app v1.2.1' "$("$CREATE_SCRIPT" --version)"
 
 # A bare WKWebView treats file uploads as cancelled. The generated host must
 # bridge HTML file inputs to an NSOpenPanel and retain that bridge as uiDelegate.

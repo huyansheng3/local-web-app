@@ -3,9 +3,8 @@
 # https://github.com/huyansheng/local-web-app
 set -euo pipefail
 
-VERSION="1.2.0"
+VERSION="1.2.1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GITHUB_RAW="https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@v1.1.1"
 
 # ── Preset lookup (compatible with bash 3 on macOS) ──────────
 
