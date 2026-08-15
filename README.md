@@ -6,7 +6,7 @@
 
 ```bash
 # 远程一键执行（无需 clone）— jsDelivr CDN 镜像，国内直连不卡
-bash <(curl -sSL https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@ba4786d6c0e16141581e0471b2a7fdbaf4845f0f/create) --preset dsh
+bash <(curl -sSL https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@e9d1529c39936f08fa6df66bf4e913ab28f751b0/create) --preset dsh
 
 # 如果你能访问 GitHub，也可以用原始地址
 bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
@@ -40,7 +40,7 @@ local-web-app 把这类服务**包成双击即开的 macOS App**：
 
 ```bash
 # 推荐：通过 jsDelivr CDN 镜像执行（国内直连，不卡）
-bash <(curl -sSL https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@ba4786d6c0e16141581e0471b2a7fdbaf4845f0f/create) --preset dsh
+bash <(curl -sSL https://cdn.jsdelivr.net/gh/huyansheng3/local-web-app@e9d1529c39936f08fa6df66bf4e913ab28f751b0/create) --preset dsh
 
 # 备选：通过 GitHub raw 执行（需要能访问 GitHub）
 bash <(curl -sSL https://raw.githubusercontent.com/huyansheng3/local-web-app/main/create) --preset dsh
@@ -163,6 +163,7 @@ chmod +x create
 | 服务就绪 | HTTP 探测成功 → 停止加载动画 → 显示 WebView |
 | 启动超时 | 30 秒内未就绪 → 显示错误 + 重试按钮 + 日志路径 |
 | 服务崩溃 | 非零退出码 → 显示错误信息 |
+| 选择文件 | HTML 文件输入 → 原生 `NSOpenPanel`，支持多选和目录选择 |
 | 关闭 App | `willTerminateNotification` → 终止服务进程 |
 
 ### Login Shell 执行
@@ -234,9 +235,17 @@ local-web-app/
 ├── icons/
 │   ├── dsh.png      # DeepSeek Harness 预设图标
 │   └── reasonix.png # Reasonix 预设图标
+├── test/
+│   └── create.test.sh  # CLI 与生成模板回归测试
 ├── README.md
 ├── LICENSE
 └── .gitignore
+```
+
+运行回归测试：
+
+```bash
+bash test/create.test.sh
 ```
 
 ## 限制
