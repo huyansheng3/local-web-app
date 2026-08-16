@@ -23,7 +23,7 @@ assert_equals() {
 }
 
 bash -n "$CREATE_SCRIPT"
-assert_equals 'local-web-app v1.2.1' "$("$CREATE_SCRIPT" --version)"
+assert_equals 'local-web-app v1.2.2' "$("$CREATE_SCRIPT" --version)"
 
 # A bare WKWebView treats file uploads as cancelled. The generated host must
 # bridge HTML file inputs to an NSOpenPanel and retain that bridge as uiDelegate.
@@ -32,5 +32,13 @@ assert_contains 'runOpenPanelWith parameters: WKOpenPanelParameters'
 assert_contains 'panel.allowsMultipleSelection = parameters.allowsMultipleSelection'
 assert_contains 'panel.canChooseDirectories = parameters.allowsDirectories'
 assert_contains 'wv.uiDelegate = context.coordinator'
+
+# WebRTC capture needs both a WebKit origin decision and macOS TCC usage
+# descriptions. Only the wrapped app origin should receive automatic access.
+assert_contains 'requestMediaCapturePermissionFor origin: WKSecurityOrigin'
+assert_contains 'guard matchesAllowedOrigin(origin) else'
+assert_contains 'decisionHandler(.grant)'
+assert_contains '<key>NSCameraUsageDescription</key>'
+assert_contains '<key>NSMicrophoneUsageDescription</key>'
 
 echo "create tests passed"

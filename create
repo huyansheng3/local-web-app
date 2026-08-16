@@ -3,7 +3,7 @@
 # https://github.com/huyansheng/local-web-app
 set -euo pipefail
 
-VERSION="1.2.1"
+VERSION="1.2.2"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── Preset lookup (compatible with bash 3 on macOS) ──────────
@@ -2566,6 +2566,32 @@ final class ServerManager: ObservableObject {
 }
 
 final class WebViewCoordinator: NSObject, WKUIDelegate {
+    private let allowedScheme: String
+    private let allowedHost: String
+    private let allowedPort: Int
+
+    init(allowedURL: URL) {
+        allowedScheme = allowedURL.scheme?.lowercased() ?? ""
+        allowedHost = allowedURL.host?.lowercased() ?? ""
+        allowedPort = allowedURL.port ?? Self.defaultPort(for: allowedScheme)
+    }
+
+    private static func defaultPort(for scheme: String) -> Int {
+        switch scheme {
+        case "http": return 80
+        case "https": return 443
+        default: return -1
+        }
+    }
+
+    private func matchesAllowedOrigin(_ origin: WKSecurityOrigin) -> Bool {
+        let scheme = origin.protocol.lowercased()
+        let port = origin.port == 0 ? Self.defaultPort(for: scheme) : origin.port
+        return scheme == allowedScheme
+            && origin.host.lowercased() == allowedHost
+            && port == allowedPort
+    }
+
     func webView(
         _ webView: WKWebView,
         runOpenPanelWith parameters: WKOpenPanelParameters,
@@ -2580,11 +2606,25 @@ final class WebViewCoordinator: NSObject, WKUIDelegate {
             completionHandler(response == .OK ? panel.urls : nil)
         }
     }
+
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        guard matchesAllowedOrigin(origin) else {
+            decisionHandler(.deny)
+            return
+        }
+        decisionHandler(.grant)
+    }
 }
 
 struct WebView: NSViewRepresentable {
     let url: URL
-    func makeCoordinator() -> WebViewCoordinator { WebViewCoordinator() }
+    func makeCoordinator() -> WebViewCoordinator { WebViewCoordinator(allowedURL: url) }
     func makeNSView(context: Context) -> WKWebView {
         let wv = WKWebView()
         wv.uiDelegate = context.coordinator
@@ -2689,6 +2729,10 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
     <string>${BIN_NAME}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Allow this app to use the camera for web features.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Allow this app to use the microphone for web features.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 ${ICON_PLIST_LINE}
